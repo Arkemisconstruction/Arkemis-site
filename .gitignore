@@ -1,0 +1,8 @@
+.env
+.env.*
+node_modules/
+vendor/
+*.log
+*.zip
+Thumbs.db
+.DS_Store
