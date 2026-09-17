@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schemas.wp.org/wp/6.6/theme.json",
+  "version": 3,
+  "settings": {
+    "layout": {
+      "contentSize": "48rem",
+      "wideSize": "75rem"
+    }
+  },
+  "customTemplates": [
+    {
+      "name": "service",
+      "title": "Service Arkemis",
+      "postTypes": [
+        "page"
+      ]
+    },
+    {
+      "name": "contact",
+      "title": "Contact Arkemis",
+      "postTypes": [
+        "page"
+      ]
+    }
+  ],
+  "templateParts": [
+    {
+      "name": "header",
+      "title": "En-tête",
+      "area": "header"
+    },
+    {
+      "name": "footer",
+      "title": "Pied de page",
+      "area": "footer"
+    }
+  ]
+}
