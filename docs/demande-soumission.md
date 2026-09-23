@@ -1,6 +1,6 @@
 # Demande de soumission
 
-La Page WordPress native **Demander une soumission** conserve le slug `/contact/` et le modèle `contact`. Les liens Contact et Demander une soumission existants pointent déjà vers cette adresse. Le contenu est la composition `arkemis/contact`, insérée dans la Page ; aucune Page n’est créée automatiquement par le thème ou le plugin.
+La Page WordPress native **Demander une soumission** utilise le slug `/demander-une-soumission/` et le modèle `contact`. Les appels à soumission du thème pointent vers cette adresse ; `/contact/` reste une Page distincte pour les coordonnées générales. Le contenu de la Page de soumission est une copie éditable de la composition `arkemis/contact` contenant le bloc `arkemis/quote-form`.
 
 ## Responsabilités
 
@@ -31,8 +31,8 @@ En production, ajouter dans le `wp-config.php` non suivi, avant la ligne qui arr
 
 À valider ultérieurement, avec autorisation sur l’environnement de développement :
 
-- Configurer le jeton sur l’environnement de développement autorisé, soumettre une demande unique depuis `/contact/`, puis vérifier le message de confirmation et la demande correspondante dans la plateforme avec le même `request_id` dans les journaux techniques.
-- Exclure `/contact/`, ses réponses POST et confirmations de tout cache serveur/CDN afin de préserver les nonces, erreurs et données saisies. Le module émet déjà des en-têtes sans cache.
+- Configurer le jeton sur l’environnement de développement autorisé, soumettre une demande unique depuis `/demander-une-soumission/`, puis vérifier le message de confirmation et la demande correspondante dans la plateforme avec le même `request_id` dans les journaux techniques.
+- Exclure `/demander-une-soumission/`, ses réponses POST et confirmations de tout cache serveur/CDN afin de préserver les nonces, erreurs et données saisies. Le module émet déjà des en-têtes sans cache.
 - Vérifier HTTPS et la limitation des tentatives derrière le proxy réel. Ne faire confiance à un header d’adresse client qu’après configuration explicite d’un proxy de confiance.
 - Définir, lors de la future phase CRM, la conservation, les accès et le traitement des demandes en échec. Cette version repose sur le courriel et n’ajoute pas de stockage de secours de données personnelles.
 

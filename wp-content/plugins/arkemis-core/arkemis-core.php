@@ -11,7 +11,7 @@
  */
 defined( 'ABSPATH' ) || exit;
 
-foreach ( array( 'realisations', 'taxonomies', 'meta-fields', 'admin', 'quote-requests' ) as $module ) {
+foreach ( array( 'realisations', 'taxonomies', 'meta-fields', 'admin', 'quote-requests', 'site-initializer' ) as $module ) {
 	require_once __DIR__ . '/inc/' . $module . '.php';
 }
 
