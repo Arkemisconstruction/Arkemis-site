@@ -88,8 +88,22 @@ function arkemis_core_platform_token() {
 }
 
 function arkemis_core_quote_payload( $request ) {
-	$fields = array( 'schema_version', 'request_id', 'first_name', 'last_name', 'phone', 'email', 'city', 'project_type', 'budget', 'description', 'timeline', 'contact_method' );
-	return array_intersect_key( $request, array_flip( $fields ) );
+	$choices = arkemis_core_quote_choices();
+	$details = array(
+		'Budget approximatif : ' . ( $choices['budget'][ $request['budget'] ] ?? $request['budget'] ),
+		'Échéancier souhaité : ' . ( $choices['timeline'][ $request['timeline'] ] ?? $request['timeline'] ),
+		'Méthode de contact préférée : ' . ( $choices['contact_method'][ $request['contact_method'] ] ?? $request['contact_method'] ),
+	);
+	return array(
+		'first_name' => $request['first_name'],
+		'last_name' => $request['last_name'],
+		'phone' => $request['phone'],
+		'email' => $request['email'],
+		'city' => $request['city'],
+		'project_type' => $request['project_type'],
+		'message' => $request['description'] . "\n\n" . implode( "\n", $details ),
+		'source' => 'WEBSITE',
+	);
 }
 
 /** Journal technique sans coordonnées, corps de réponse ni secret. */
@@ -113,11 +127,10 @@ function arkemis_core_send_quote( $request ) {
 			'reject_unsafe_urls' => true,
 			'sslverify'          => true,
 			'headers'            => array(
-				'Accept'               => 'application/json',
-				'Authorization'        => 'Bearer ' . $token,
-				'Content-Type'         => 'application/json',
-				'Idempotency-Key'      => $request['request_id'],
-				'X-Arkemis-Request-ID' => $request['request_id'],
+				'Accept'                    => 'application/json',
+				'Content-Type'              => 'application/json',
+				'X-Arkemis-Website-Token'   => $token,
+				'X-Arkemis-Idempotency-Key' => $request['request_id'],
 			),
 			'body'                => wp_json_encode( arkemis_core_quote_payload( $request ) ),
 			'data_format'         => 'body',
@@ -136,6 +149,20 @@ function arkemis_core_send_quote( $request ) {
 
 	arkemis_core_quote_log( 'accepted', $request['request_id'], array( 'status' => $status ) );
 	return true;
+}
+
+function arkemis_core_quote_error_message( $error ) {
+	if ( is_wp_error( $error ) && 'arkemis_platform_http_error' === $error->get_error_code() ) {
+		$data = $error->get_error_data();
+		$status = is_array( $data ) ? (int) ( $data['status'] ?? 0 ) : 0;
+		if ( $status >= 400 && $status < 500 ) {
+			return 'Le service n’a pas pu accepter votre demande. Vérifiez les informations du formulaire, puis réessayez ou écrivez à info@arkemis.ca.';
+		}
+		if ( $status >= 500 ) {
+			return 'Le service de demande est temporairement indisponible. Réessayez plus tard ou écrivez à info@arkemis.ca.';
+		}
+	}
+	return 'Votre demande n’a pas pu être envoyée. Réessayez ou écrivez directement à info@arkemis.ca.';
 }
 
 function arkemis_core_quote_state() {
@@ -192,16 +219,17 @@ add_action( 'template_redirect', function () {
 					set_transient( 'arkemis_quote_sent_' . $id, 1, DAY_IN_SECONDS );
 				}
 			} catch ( Throwable $error ) {
-				$sent = false;
+				arkemis_core_quote_log( 'unexpected_error', $id, array( 'error_code' => 'unexpected_exception' ) );
+				$sent = new WP_Error( 'arkemis_platform_unexpected_error', 'Une erreur inattendue est survenue.' );
 			} finally {
 				delete_option( $lock );
 			}
-			if ( $sent ) {
+			if ( true === $sent ) {
 				do_action( 'arkemis_quote_received', $request );
 				wp_safe_redirect( add_query_arg( 'demande', $id, get_permalink() ) . '#demande-confirmation', 303 );
 				exit;
 			}
-			$state['errors']['form'] = 'Votre demande n’a pas pu être envoyée. Réessayez ou écrivez directement à info@arkemis.ca.';
+			$state['errors']['form'] = arkemis_core_quote_error_message( $sent );
 		}
 	}
 	$GLOBALS['arkemis_quote_state'] = $state;

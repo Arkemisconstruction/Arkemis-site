@@ -12,6 +12,7 @@ class WP_Error {
 		$this->data = $data;
 	}
 	public function get_error_code() { return $this->code; }
+	public function get_error_data() { return $this->data; }
 }
 
 $GLOBALS['remote_response'] = array( 'response' => array( 'code' => 202 ) );
@@ -58,18 +59,33 @@ check( true === arkemis_core_send_quote( $request ), 'une réponse 2xx doit réu
 $first = $GLOBALS['remote_calls'][0];
 check( 'https://plateforme.arkemis.ca/api/public/website-inquiries' === $first['url'], 'endpoint inattendu' );
 check( 10 === $first['options']['timeout'], 'timeout HTTP inattendu' );
-check( $request['request_id'] === $first['options']['headers']['Idempotency-Key'], 'clé d\'idempotence absente' );
-check( false === strpos( $first['options']['body'], 'organization_id' ), 'un identifiant tenant ne doit jamais être envoyé' );
+$headers = $first['options']['headers'];
+check( 'test-token-not-a-real-secret' === $headers['X-Arkemis-Website-Token'], 'header X-Arkemis-Website-Token absent' );
+check( $request['request_id'] === $headers['X-Arkemis-Idempotency-Key'], 'header X-Arkemis-Idempotency-Key absent' );
+check( ! isset( $headers['Authorization'], $headers['Idempotency-Key'], $headers['X-Arkemis-Request-ID'] ), 'anciens headers API encore présents' );
+$body = json_decode( $first['options']['body'], true );
+check( array( 'first_name', 'last_name', 'phone', 'email', 'city', 'project_type', 'message', 'source' ) === array_keys( $body ), 'clés du payload non conformes au contrat' );
+check( 'WEBSITE' === $body['source'], 'source WEBSITE absente' );
+check( 0 === strpos( $body['message'], $values['description'] ), 'description non mappée vers message' );
+check( false !== strpos( $body['message'], 'Budget approximatif : 20 000 à 40 000 $' ), 'budget absent du message' );
+check( false !== strpos( $body['message'], 'Échéancier souhaité : Dans les 1 à 3 mois' ), 'échéancier absent du message' );
+check( false !== strpos( $body['message'], 'Méthode de contact préférée : Courriel' ), 'méthode de contact absente du message' );
+foreach ( array( 'schema_version', 'request_id', 'budget', 'description', 'timeline', 'contact_method', 'organization_id' ) as $forbidden ) {
+	check( ! array_key_exists( $forbidden, $body ), "champ API interdit encore présent : {$forbidden}" );
+}
 check( false === strpos( $first['options']['body'], 'test-token' ), 'le secret ne doit jamais être dans le JSON' );
 
 arkemis_core_send_quote( $request );
-check( $GLOBALS['remote_calls'][0]['options']['headers']['Idempotency-Key'] === $GLOBALS['remote_calls'][1]['options']['headers']['Idempotency-Key'], 'une relance doit conserver la clé d\'idempotence' );
+check( $GLOBALS['remote_calls'][0]['options']['headers']['X-Arkemis-Idempotency-Key'] === $GLOBALS['remote_calls'][1]['options']['headers']['X-Arkemis-Idempotency-Key'], 'une relance doit conserver la clé d\'idempotence' );
 
 $GLOBALS['remote_response'] = new WP_Error( 'http_request_failed', 'Operation timed out' );
 check( is_wp_error( arkemis_core_send_quote( $request ) ), 'un timeout doit être retourné comme erreur' );
 foreach ( array( 400, 422, 500, 503 ) as $status ) {
 	$GLOBALS['remote_response'] = array( 'response' => array( 'code' => $status ) );
-	check( is_wp_error( arkemis_core_send_quote( $request ) ), "HTTP {$status} doit être retourné comme erreur" );
+	$error = arkemis_core_send_quote( $request );
+	check( is_wp_error( $error ), "HTTP {$status} doit être retourné comme erreur" );
+	$message = arkemis_core_quote_error_message( $error );
+	check( false !== strpos( $message, $status < 500 ? 'accepter votre demande' : 'temporairement indisponible' ), "message visiteur HTTP {$status} incorrect" );
 }
 
 echo "OK: validation, 2xx, timeout, 4xx/5xx, payload et idempotence\n";
