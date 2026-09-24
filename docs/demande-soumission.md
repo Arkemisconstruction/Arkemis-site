@@ -32,7 +32,17 @@ En production, ajouter dans le `wp-config.php` non suivi, avant la ligne qui arr
 À valider ultérieurement, avec autorisation sur l’environnement de développement :
 
 - Configurer le jeton sur l’environnement de développement autorisé, soumettre une demande unique depuis `/demander-une-soumission/`, puis vérifier le message de confirmation et la demande correspondante dans la plateforme avec le même `request_id` dans les journaux techniques.
-- Exclure `/demander-une-soumission/`, ses réponses POST et confirmations de tout cache serveur/CDN afin de préserver les nonces, erreurs et données saisies. Le module émet déjà des en-têtes sans cache.
+- `/demander-une-soumission/`, ses réponses POST et confirmations sont marquées non cacheables par
+  `DONOTCACHEPAGE`, l’API `litespeed_control_set_nocache`, les en-têtes WordPress `nocache_headers`,
+  `Cache-Control: no-store`, `CDN-Cache-Control: no-store` et
+  `X-LiteSpeed-Cache-Control: no-cache`. Une révision interne purge une fois cette URL via
+  `litespeed_purge_url` après la mise à jour du plugin. En défense supplémentaire, conserver
+  `^/demander-une-soumission/$` dans LiteSpeed Cache → Cache → Exclusions → Ne pas mettre en cache
+  les URI.
+- Chaque rendu neuf crée un jeton signé et un UUID différents. Une erreur de validation, un timeout
+  ou une relance du même POST conserve toutefois le jeton original afin que la même tentative garde
+  sa clé d’idempotence. « Présenter un autre projet » effectue un nouveau GET non cacheable et reçoit
+  donc un nouvel identifiant.
 - Vérifier HTTPS et la limitation des tentatives derrière le proxy réel. Ne faire confiance à un header d’adresse client qu’après configuration explicite d’un proxy de confiance.
 - Définir, lors de la future phase CRM, la conservation, les accès et le traitement des demandes en échec. Cette version repose sur le courriel et n’ajoute pas de stockage de secours de données personnelles.
 

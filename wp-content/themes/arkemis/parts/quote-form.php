@@ -28,7 +28,7 @@ if ( $state['success'] ) : ?>
 <?php endif; ?>
 <?php wp_nonce_field( 'arkemis_quote_submit', 'arkemis_quote_nonce', false ); ?>
 <input type="hidden" name="arkemis_quote_submit" value="1" />
-<input type="hidden" name="arkemis_quote_token" value="<?php echo esc_attr( arkemis_core_quote_token() ); ?>" />
+<input type="hidden" name="arkemis_quote_token" value="<?php echo esc_attr( arkemis_core_quote_form_token( $state ) ); ?>" />
 <div class="arkemis-form-trap" aria-hidden="true"><label for="quote-website">Laissez ce champ vide</label><input type="text" name="website" id="quote-website" tabindex="-1" autocomplete="off" /></div>
 <div class="arkemis-form-grid">
 <?php

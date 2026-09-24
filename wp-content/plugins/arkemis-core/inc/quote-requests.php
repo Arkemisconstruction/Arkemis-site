@@ -79,6 +79,40 @@ function arkemis_core_quote_token_id( $token ) {
 	return $age >= 0 && $age <= 2 * HOUR_IN_SECONDS && hash_equals( hash_hmac( 'sha256', $parts[1] . '.' . $parts[2], wp_salt( 'nonce' ) ), $parts[3] ) ? $parts[1] : '';
 }
 
+function arkemis_core_quote_form_token( $state = array() ) {
+	$existing = is_array( $state ) && isset( $state['quote_token'] ) && is_string( $state['quote_token'] ) ? $state['quote_token'] : '';
+	return arkemis_core_quote_token_id( $existing ) ? $existing : arkemis_core_quote_token();
+}
+
+function arkemis_core_is_quote_page() {
+	return function_exists( 'is_page' ) && is_page( 'demander-une-soumission' );
+}
+
+function arkemis_core_quote_disable_cache() {
+	if ( ! arkemis_core_is_quote_page() ) {
+		return;
+	}
+	if ( ! defined( 'DONOTCACHEPAGE' ) ) {
+		define( 'DONOTCACHEPAGE', true );
+	}
+	do_action( 'litespeed_control_set_nocache', 'Formulaire de soumission Arkemis dynamique' );
+	nocache_headers();
+	header( 'Cache-Control: no-store, no-cache, must-revalidate, max-age=0', true );
+	header( 'CDN-Cache-Control: no-store', true );
+	header( 'X-LiteSpeed-Cache-Control: no-cache', true );
+}
+
+add_action( 'wp', 'arkemis_core_quote_disable_cache', 0 );
+
+add_action( 'init', function () {
+	$cache_revision = '2026-09-24-quote-form-v1';
+	if ( get_option( 'arkemis_quote_cache_revision' ) === $cache_revision ) {
+		return;
+	}
+	do_action( 'litespeed_purge_url', home_url( '/demander-une-soumission/' ) );
+	update_option( 'arkemis_quote_cache_revision', $cache_revision, false );
+} );
+
 function arkemis_core_platform_token() {
 	if ( defined( 'ARKEMIS_PLATFORM_API_TOKEN' ) && is_string( ARKEMIS_PLATFORM_API_TOKEN ) ) {
 		return trim( ARKEMIS_PLATFORM_API_TOKEN );
@@ -166,14 +200,14 @@ function arkemis_core_quote_error_message( $error ) {
 }
 
 function arkemis_core_quote_state() {
-	return $GLOBALS['arkemis_quote_state'] ?? array( 'values' => array(), 'errors' => array(), 'success' => false );
+	return $GLOBALS['arkemis_quote_state'] ?? array( 'values' => array(), 'errors' => array(), 'success' => false, 'quote_token' => '' );
 }
 
 add_action( 'template_redirect', function () {
-	if ( ! is_page_template( 'contact' ) ) {
+	if ( ! arkemis_core_is_quote_page() ) {
 		return;
 	}
-	nocache_headers();
+	arkemis_core_quote_disable_cache();
 	$receipt = isset( $_GET['demande'] ) && is_string( $_GET['demande'] ) ? sanitize_text_field( wp_unslash( $_GET['demande'] ) ) : '';
 	if ( preg_match( '/^[a-f0-9-]{36}$/', $receipt ) && get_transient( 'arkemis_quote_sent_' . $receipt ) ) {
 		$GLOBALS['arkemis_quote_state'] = array( 'values' => array(), 'errors' => array(), 'success' => true );
@@ -188,12 +222,15 @@ add_action( 'template_redirect', function () {
 	$id = arkemis_core_quote_token_id( $input['arkemis_quote_token'] ?? '' );
 	if ( ! is_string( $nonce ) || ! wp_verify_nonce( $nonce, 'arkemis_quote_submit' ) || ! $id ) {
 		$state['errors']['form'] = 'Le formulaire a expiré. Vérifiez vos informations et envoyez de nouveau votre demande.';
-	} elseif ( ! isset( $input['website'] ) || ! is_string( $input['website'] ) || '' !== $input['website'] ) {
+	} else {
+		$state['quote_token'] = $input['arkemis_quote_token'];
+	}
+	if ( ! $state['errors'] && ( ! isset( $input['website'] ) || ! is_string( $input['website'] ) || '' !== $input['website'] ) ) {
 		$state['errors']['form'] = 'La demande n’a pas pu être validée. Rechargez la page et réessayez.';
-	} elseif ( get_transient( 'arkemis_quote_sent_' . $id ) ) {
+	} elseif ( ! $state['errors'] && get_transient( 'arkemis_quote_sent_' . $id ) ) {
 		wp_safe_redirect( add_query_arg( 'demande', $id, get_permalink() ) . '#demande-confirmation', 303 );
 		exit;
-	} else {
+	} elseif ( ! $state['errors'] ) {
 		$ip = is_string( $_SERVER['REMOTE_ADDR'] ?? null ) ? $_SERVER['REMOTE_ADDR'] : '';
 		$key = 'arkemis_quote_rate_' . hash_hmac( 'sha256', $ip, wp_salt( 'auth' ) );
 		$count = (int) get_transient( $key );
