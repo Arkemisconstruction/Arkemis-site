@@ -59,6 +59,14 @@ $values = array(
 );
 $validation = arkemis_core_validate_quote( $values );
 check( array() === $validation['errors'], 'un payload valide doit passer la validation' );
+check( '' === $validation['values']['website_honeypot'], 'le honeypot doit rester vide pour une demande normale' );
+$honeypot_values = $values;
+$honeypot_values['website_honeypot'] = 'robot-filled';
+$honeypot_validation = arkemis_core_validate_quote( $honeypot_values );
+check( array() === $honeypot_validation['errors'], 'WordPress ne doit pas bloquer un honeypot rempli' );
+check( 'robot-filled' === $honeypot_validation['values']['website_honeypot'], 'le honeypot rempli doit être transmis à l’API' );
+$honeypot_payload = arkemis_core_quote_payload( $honeypot_validation['values'] );
+check( 'robot-filled' === $honeypot_payload['website_honeypot'], 'WordPress doit transmettre le honeypot rempli sans le bloquer' );
 $invalid = $values;
 $invalid['email'] = 'invalide';
 $invalid['description'] = 'court';
@@ -92,7 +100,8 @@ check( 'test-token-not-a-real-secret' === $headers['X-Arkemis-Website-Token'], '
 check( $request['request_id'] === $headers['X-Arkemis-Idempotency-Key'], 'header X-Arkemis-Idempotency-Key absent' );
 check( ! isset( $headers['Authorization'], $headers['Idempotency-Key'], $headers['X-Arkemis-Request-ID'] ), 'anciens headers API encore présents' );
 $body = json_decode( $first['options']['body'], true );
-check( array( 'first_name', 'last_name', 'phone', 'email', 'city', 'project_type', 'message', 'source' ) === array_keys( $body ), 'clés du payload non conformes au contrat' );
+check( array( 'first_name', 'last_name', 'phone', 'email', 'city', 'project_type', 'message', 'source', 'website_honeypot' ) === array_keys( $body ), 'clés du payload non conformes au contrat' );
+check( '' === $body['website_honeypot'], 'le payload normal doit envoyer un honeypot vide' );
 check( 'WEBSITE' === $body['source'], 'source WEBSITE absente' );
 check( 0 === strpos( $body['message'], $values['description'] ), 'description non mappée vers message' );
 check( false !== strpos( $body['message'], 'Budget approximatif : 20 000 à 40 000 $' ), 'budget absent du message' );

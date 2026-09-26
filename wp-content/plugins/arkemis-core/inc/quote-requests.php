@@ -18,6 +18,10 @@ function arkemis_core_quote_length( $value ) {
 function arkemis_core_validate_quote( $input ) {
 	$values = array();
 	$errors = array();
+	$honeypot = isset( $input['website_honeypot'] ) && is_string( $input['website_honeypot'] )
+		? sanitize_text_field( trim( $input['website_honeypot'] ) )
+		: '';
+	$values['website_honeypot'] = $honeypot;
 	foreach ( array( 'first_name', 'last_name', 'phone', 'email', 'city', 'project_type', 'budget', 'description', 'timeline', 'contact_method' ) as $field ) {
 		$raw = $input[ $field ] ?? '';
 		if ( ! is_string( $raw ) ) {
@@ -137,6 +141,7 @@ function arkemis_core_quote_payload( $request ) {
 		'project_type' => $request['project_type'],
 		'message' => $request['description'] . "\n\n" . implode( "\n", $details ),
 		'source' => 'WEBSITE',
+		'website_honeypot' => $request['website_honeypot'] ?? '',
 	);
 }
 
@@ -225,9 +230,7 @@ add_action( 'template_redirect', function () {
 	} else {
 		$state['quote_token'] = $input['arkemis_quote_token'];
 	}
-	if ( ! $state['errors'] && ( ! isset( $input['website'] ) || ! is_string( $input['website'] ) || '' !== $input['website'] ) ) {
-		$state['errors']['form'] = 'La demande n’a pas pu être validée. Rechargez la page et réessayez.';
-	} elseif ( ! $state['errors'] && get_transient( 'arkemis_quote_sent_' . $id ) ) {
+	if ( ! $state['errors'] && get_transient( 'arkemis_quote_sent_' . $id ) ) {
 		wp_safe_redirect( add_query_arg( 'demande', $id, get_permalink() ) . '#demande-confirmation', 303 );
 		exit;
 	} elseif ( ! $state['errors'] ) {
