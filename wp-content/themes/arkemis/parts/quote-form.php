@@ -3,6 +3,10 @@ defined( 'ABSPATH' ) || exit;
 $state = arkemis_core_quote_state();
 $values = $state['values'];
 $errors = $state['errors'];
+$turnstile_site_key = function_exists( 'arkemis_core_turnstile_site_key' ) ? arkemis_core_turnstile_site_key() : '';
+if ( '' !== $turnstile_site_key ) {
+	wp_enqueue_script( 'arkemis-turnstile-api', 'https://challenges.cloudflare.com/turnstile/v0/api.js', array(), null, true );
+}
 $labels = array( 'first_name' => 'Prénom', 'last_name' => 'Nom', 'phone' => 'Téléphone', 'email' => 'Courriel', 'city' => 'Ville / secteur', 'project_type' => 'Type de projet', 'budget' => 'Budget approximatif', 'description' => 'Description du projet', 'timeline' => 'Échéancier souhaité', 'contact_method' => 'Méthode de contact préférée' );
 $choices = arkemis_core_quote_choices();
 if ( $state['success'] ) : ?>
@@ -12,7 +16,7 @@ if ( $state['success'] ) : ?>
 <a href="<?php echo esc_url( get_permalink() ); ?>">Présenter un autre projet</a>
 </section>
 <?php return; endif; ?>
-<form class="arkemis-quote-form" method="post" action="<?php echo esc_url( get_permalink() ); ?>#demande-formulaire" id="demande-formulaire" aria-labelledby="demande-form-title" novalidate>
+<form class="arkemis-quote-form" method="post" action="<?php echo esc_url( get_permalink() ); ?>#demande-formulaire" id="demande-formulaire" aria-labelledby="demande-form-title" data-turnstile-required="<?php echo '' !== $turnstile_site_key ? '1' : '0'; ?>" novalidate>
 <h2 id="demande-form-title">Votre demande de soumission</h2>
 <p class="arkemis-form-intro">Les champs marqués d’un astérisque (*) sont obligatoires. Indiquez un téléphone ou un courriel selon votre méthode de contact préférée.</p>
 <?php if ( $errors ) : ?>
@@ -72,6 +76,12 @@ foreach ( $fields as $field => $options ) :
 </div>
 <?php endforeach; ?>
 </div>
+<?php if ( '' !== $turnstile_site_key ) : ?>
+<div class="arkemis-turnstile-wrap">
+	<div class="cf-turnstile" data-sitekey="<?php echo esc_attr( $turnstile_site_key ); ?>" data-callback="arkemisQuoteTurnstileSuccess" data-expired-callback="arkemisQuoteTurnstileExpired" data-error-callback="arkemisQuoteTurnstileError" aria-label="Vérification de sécurité"></div>
+	<p class="arkemis-turnstile-error" data-turnstile-error role="alert" tabindex="-1" hidden>Veuillez confirmer la vérification de sécurité avant d’envoyer votre demande.</p>
+</div>
+<?php endif; ?>
 <button class="arkemis-form-submit" type="submit">Envoyer ma demande</button>
 <p class="arkemis-field-hint">Pour connaître l’utilisation de vos renseignements, consultez notre <a href="<?php echo esc_url( home_url( '/politique-de-confidentialite/' ) ); ?>">politique de confidentialité</a>.</p>
 </form>

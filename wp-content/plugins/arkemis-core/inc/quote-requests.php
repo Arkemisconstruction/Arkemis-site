@@ -22,6 +22,10 @@ function arkemis_core_validate_quote( $input ) {
 		? sanitize_text_field( trim( $input['website_honeypot'] ) )
 		: '';
 	$values['website_honeypot'] = $honeypot;
+	$turnstile_token = isset( $input['cf-turnstile-response'] ) && is_string( $input['cf-turnstile-response'] )
+		? sanitize_text_field( trim( $input['cf-turnstile-response'] ) )
+		: '';
+	$values['turnstile_token'] = $turnstile_token;
 	foreach ( array( 'first_name', 'last_name', 'phone', 'email', 'city', 'project_type', 'budget', 'description', 'timeline', 'contact_method' ) as $field ) {
 		$raw = $input[ $field ] ?? '';
 		if ( ! is_string( $raw ) ) {
@@ -125,6 +129,14 @@ function arkemis_core_platform_token() {
 	return is_string( $token ) ? trim( $token ) : '';
 }
 
+function arkemis_core_turnstile_site_key() {
+	if ( defined( 'TURNSTILE_SITE_KEY' ) && is_string( TURNSTILE_SITE_KEY ) ) {
+		return trim( TURNSTILE_SITE_KEY );
+	}
+	$key = getenv( 'TURNSTILE_SITE_KEY' );
+	return is_string( $key ) ? trim( $key ) : '';
+}
+
 function arkemis_core_quote_payload( $request ) {
 	$choices = arkemis_core_quote_choices();
 	$details = array(
@@ -142,6 +154,7 @@ function arkemis_core_quote_payload( $request ) {
 		'message' => $request['description'] . "\n\n" . implode( "\n", $details ),
 		'source' => 'WEBSITE',
 		'website_honeypot' => $request['website_honeypot'] ?? '',
+		'turnstile_token' => $request['turnstile_token'] ?? '',
 	);
 }
 

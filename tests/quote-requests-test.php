@@ -60,6 +60,17 @@ $values = array(
 $validation = arkemis_core_validate_quote( $values );
 check( array() === $validation['errors'], 'un payload valide doit passer la validation' );
 check( '' === $validation['values']['website_honeypot'], 'le honeypot doit rester vide pour une demande normale' );
+$previous_site_key = getenv( 'TURNSTILE_SITE_KEY' );
+putenv( 'TURNSTILE_SITE_KEY' );
+check( '' === arkemis_core_turnstile_site_key(), 'sans SITE KEY Turnstile doit rester désactivé' );
+check( '' === $validation['values']['turnstile_token'], 'le token Turnstile est vide lorsque le challenge est désactivé' );
+putenv( 'TURNSTILE_SITE_KEY=public-test-site-key' );
+check( 'public-test-site-key' === arkemis_core_turnstile_site_key(), 'la clé publique Turnstile doit être lue de la configuration serveur' );
+if ( false === $previous_site_key ) { putenv( 'TURNSTILE_SITE_KEY' ); } else { putenv( 'TURNSTILE_SITE_KEY=' . $previous_site_key ); }
+$turnstile_input = $values;
+$turnstile_input['cf-turnstile-response'] = 'one-use-turnstile-token';
+$turnstile_validation = arkemis_core_validate_quote( $turnstile_input );
+check( 'one-use-turnstile-token' === $turnstile_validation['values']['turnstile_token'], 'la réponse Cloudflare doit être lue du champ standard' );
 $honeypot_values = $values;
 $honeypot_values['website_honeypot'] = 'robot-filled';
 $honeypot_validation = arkemis_core_validate_quote( $honeypot_values );
@@ -67,6 +78,19 @@ check( array() === $honeypot_validation['errors'], 'WordPress ne doit pas bloque
 check( 'robot-filled' === $honeypot_validation['values']['website_honeypot'], 'le honeypot rempli doit être transmis à l’API' );
 $honeypot_payload = arkemis_core_quote_payload( $honeypot_validation['values'] );
 check( 'robot-filled' === $honeypot_payload['website_honeypot'], 'WordPress doit transmettre le honeypot rempli sans le bloquer' );
+$turnstile_values = $values;
+$turnstile_values['turnstile_token'] = 'one-use-turnstile-token';
+check( 'one-use-turnstile-token' === arkemis_core_quote_payload( $turnstile_values )['turnstile_token'], 'le token Turnstile doit être transmis au backend' );
+$theme_root = dirname( __DIR__ ) . '/wp-content/themes/arkemis';
+$quote_form_source = file_get_contents( $theme_root . '/parts/quote-form.php' );
+$contact_script = file_get_contents( $theme_root . '/assets/js/contact.js' );
+check( false !== strpos( $quote_form_source, "if ( '' !== \$turnstile_site_key )" ), 'le widget doit être conditionnel à la SITE KEY' );
+check( false !== strpos( $quote_form_source, 'https://challenges.cloudflare.com/turnstile/v0/api.js' ), 'le script officiel Cloudflare doit être chargé avec une SITE KEY' );
+check( false !== strpos( $quote_form_source, 'class="cf-turnstile"' ), 'le widget officiel doit être rendu avec une SITE KEY' );
+check( false !== strpos( $contact_script, 'cf-turnstile-response' ), 'le formulaire doit refuser un token absent côté frontend' );
+check( false !== strpos( $contact_script, 'arkemisQuoteTurnstileExpired' ), 'un challenge expiré doit pouvoir être renouvelé' );
+check( false === strpos( $quote_form_source . $contact_script, 'TURNSTILE_SECRET_KEY' ), 'aucune SECRET KEY ne doit être exposée au thème' );
+check( false !== strpos( $quote_form_source, "wp_nonce_field( 'arkemis_quote_submit', 'arkemis_quote_nonce', false )" ), 'le nonce WordPress doit rester présent' );
 $invalid = $values;
 $invalid['email'] = 'invalide';
 $invalid['description'] = 'court';
@@ -100,8 +124,9 @@ check( 'test-token-not-a-real-secret' === $headers['X-Arkemis-Website-Token'], '
 check( $request['request_id'] === $headers['X-Arkemis-Idempotency-Key'], 'header X-Arkemis-Idempotency-Key absent' );
 check( ! isset( $headers['Authorization'], $headers['Idempotency-Key'], $headers['X-Arkemis-Request-ID'] ), 'anciens headers API encore présents' );
 $body = json_decode( $first['options']['body'], true );
-check( array( 'first_name', 'last_name', 'phone', 'email', 'city', 'project_type', 'message', 'source', 'website_honeypot' ) === array_keys( $body ), 'clés du payload non conformes au contrat' );
+check( array( 'first_name', 'last_name', 'phone', 'email', 'city', 'project_type', 'message', 'source', 'website_honeypot', 'turnstile_token' ) === array_keys( $body ), 'clés du payload non conformes au contrat' );
 check( '' === $body['website_honeypot'], 'le payload normal doit envoyer un honeypot vide' );
+check( '' === $body['turnstile_token'], 'le payload normal doit envoyer un token Turnstile vide' );
 check( 'WEBSITE' === $body['source'], 'source WEBSITE absente' );
 check( 0 === strpos( $body['message'], $values['description'] ), 'description non mappée vers message' );
 check( false !== strpos( $body['message'], 'Budget approximatif : 20 000 à 40 000 $' ), 'budget absent du message' );
@@ -117,7 +142,7 @@ check( $GLOBALS['remote_calls'][0]['options']['headers']['X-Arkemis-Idempotency-
 
 $GLOBALS['remote_response'] = new WP_Error( 'http_request_failed', 'Operation timed out' );
 check( is_wp_error( arkemis_core_send_quote( $request ) ), 'un timeout doit être retourné comme erreur' );
-foreach ( array( 400, 422, 500, 503 ) as $status ) {
+foreach ( array( 400, 403, 422, 500, 503 ) as $status ) {
 	$GLOBALS['remote_response'] = array( 'response' => array( 'code' => $status ) );
 	$error = arkemis_core_send_quote( $request );
 	check( is_wp_error( $error ), "HTTP {$status} doit être retourné comme erreur" );
